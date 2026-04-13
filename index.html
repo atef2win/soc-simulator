@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOC Detection System — Attack Simulator v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07090f;
+  --bg2: #0d1117;
+  --bg3: #111820;
+  --border: #1e2d3d;
+  --border2: #243447;
+  --accent: #00d4ff;
+  --red: #ff3b3b;
+  --orange: #ff8c00;
+  --yellow: #ffd700;
+  --green: #00ff88;
+  --green2: #00cc6a;
+  --purple: #8b5cf6;
+  --text: #c9d1d9;
+  --text2: #6e7b8a;
+  --text3: #3d4f5e;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-ui: 'Rajdhani', sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-ui); min-height: 100vh; overflow-x: hidden; }
+body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(ellipse 80% 50% at 10% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), radial-gradient(ellipse 60% 60% at 90% 80%, rgba(139,92,246,0.03) 0%, transparent 60%); pointer-events: none; z-index: 0; }
+.scanline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 4px); pointer-events: none; z-index: 1; }
+
+header { position: relative; z-index: 10; display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; border-bottom: 1px solid var(--border); background: rgba(7,9,15,0.95); backdrop-filter: blur(10px); }
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo-icon { width: 34px; height: 34px; border: 1.5px solid var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; animation: pulse-border 2s ease-in-out infinite; }
+@keyframes pulse-border { 0%,100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); } 50% { box-shadow: 0 0 12px rgba(0,212,255,0.3); } }
+.logo-text { font-size: 17px; font-weight: 700; letter-spacing: 0.1em; color: #fff; }
+.logo-text span { color: var(--accent); }
+.logo-sub { font-family: var(--font-mono); font-size: 9px; color: var(--text2); letter-spacing: 0.15em; }
+.header-right { display: flex; align-items: center; gap: 20px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 1.5s ease-in-out infinite; display: inline-block; margin-right: 6px; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.clock { font-family: var(--font-mono); font-size: 12px; color: var(--text2); }
+
+main { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 360px; height: calc(100vh - 61px); }
+
+/* METRICS */
+.metrics-bar { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, 1fr); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.metric { padding: 12px 18px; border-right: 1px solid var(--border); }
+.metric:last-child { border-right: none; }
+.metric-label { font-family: var(--font-mono); font-size: 9px; color: var(--text3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 3px; }
+.metric-value { font-family: var(--font-mono); font-size: 20px; color: #fff; transition: color 0.3s; }
+.metric-value.green { color: var(--green); }
+.metric-value.red { color: var(--red); }
+.metric-value.accent { color: var(--accent); }
+.metric-value.orange { color: var(--orange); }
+.metric-sub { font-family: var(--font-mono); font-size: 9px; color: var(--text3); margin-top: 1px; }
+
+/* LEFT PANEL */
+.panel-left { overflow-y: auto; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.section { padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.section-title { font-family: var(--font-mono); font-size: 9px; color: var(--text2); letter-spacing: 0.2em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* SCENARIO CARDS */
+.scenarios-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.scenario-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; padding: 12px; cursor: pointer; transition: all 0.15s; position: relative; overflow: hidden; user-select: none; }
+.scenario-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--card-color, var(--border)); }
+.scenario-card:hover { border-color: var(--card-color, var(--accent)); transform: translateY(-1px); }
+.scenario-card.selected { border-color: var(--card-color); background: var(--bg3); box-shadow: 0 0 12px rgba(0,0,0,0.3); }
+.scenario-card.queued { border-color: var(--card-color); opacity: 0.7; }
+.scenario-card.sending { animation: card-sending 0.5s ease-in-out infinite alternate; }
+@keyframes card-sending { from { box-shadow: 0 0 0 0 rgba(0,212,255,0); } to { box-shadow: 0 0 16px rgba(0,212,255,0.2); } }
+.scenario-card.done-ok { border-color: var(--green2) !important; }
+.scenario-card.done-err { border-color: var(--red) !important; }
+.scenario-card[data-sev="critical"] { --card-color: var(--red); }
+.scenario-card[data-sev="high"] { --card-color: var(--orange); }
+.scenario-card[data-sev="medium"] { --card-color: var(--yellow); }
+.scenario-card[data-sev="low"] { --card-color: var(--green); }
+.sc-badge { display: inline-block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 2px; margin-bottom: 6px; }
+.badge-critical { background: rgba(255,59,59,0.15); color: var(--red); border: 1px solid rgba(255,59,59,0.3); }
+.badge-high { background: rgba(255,140,0,0.15); color: var(--orange); border: 1px solid rgba(255,140,0,0.3); }
+.badge-medium { background: rgba(255,215,0,0.15); color: var(--yellow); border: 1px solid rgba(255,215,0,0.3); }
+.badge-low { background: rgba(0,255,136,0.15); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+.sc-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 3px; }
+.sc-ip { font-family: var(--font-mono); font-size: 10px; color: var(--text2); }
+.sc-mitre { font-family: var(--font-mono); font-size: 9px; color: var(--purple); margin-top: 5px; }
+.sc-status { position: absolute; top: 8px; right: 8px; font-family: var(--font-mono); font-size: 11px; }
+
+/* CONTROLS */
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.ctrl-label { font-family: var(--font-mono); font-size: 9px; color: var(--text2); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 5px; }
+select, input[type=number] { width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: var(--font-mono); font-size: 12px; padding: 7px 10px; outline: none; transition: border-color 0.2s; }
+select:focus, input[type=number]:focus { border-color: var(--accent); }
+select option { background: var(--bg2); }
+
+/* BUTTONS */
+.btn-row { display: flex; gap: 8px; }
+.btn { padding: 11px 16px; border-radius: 6px; font-family: var(--font-ui); font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; transition: all 0.2s; border: 1px solid; }
+.btn-primary { background: transparent; border-color: var(--accent); color: var(--accent); flex: 1; }
+.btn-primary:hover:not(:disabled) { background: rgba(0,212,255,0.08); }
+.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+.btn-danger:hover:not(:disabled) { background: rgba(255,59,59,0.08); }
+.btn-purple { background: transparent; border-color: var(--purple); color: var(--purple); }
+.btn-purple:hover:not(:disabled) { background: rgba(139,92,246,0.08); }
+.btn-orange { background: transparent; border-color: var(--orange); color: var(--orange); flex: 1; }
+.btn-orange:hover:not(:disabled) { background: rgba(255,140,0,0.08); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn.active { animation: btn-active 0.6s ease-in-out infinite; }
+@keyframes btn-active { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 12px rgba(0,212,255,0.3); } }
+
+/* QUEUE */
+.queue-list { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
+.queue-item { display: flex; align-items: center; gap: 10px; background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; padding: 8px 12px; font-family: var(--font-mono); font-size: 11px; }
+.queue-item.sending { border-color: var(--accent); color: var(--accent); }
+.queue-item.done { border-color: var(--green2); color: var(--green2); opacity: 0.7; }
+.queue-item.error { border-color: var(--red); color: var(--red); }
+.queue-item.waiting { color: var(--text2); }
+.q-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.q-dot.sending { background: var(--accent); animation: blink 0.5s infinite; }
+.q-dot.done { background: var(--green2); }
+.q-dot.error { background: var(--red); }
+.q-dot.waiting { background: var(--text3); }
+.q-label { flex: 1; }
+.q-time { color: var(--text3); }
+.empty-queue { font-family: var(--font-mono); font-size: 11px; color: var(--text3); text-align: center; padding: 16px; }
+
+/* RIGHT PANEL */
+.panel-right { background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+.log-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.log-title { font-family: var(--font-mono); font-size: 9px; color: var(--text2); letter-spacing: 0.2em; }
+.btn-clear { font-family: var(--font-mono); font-size: 9px; color: var(--text3); background: none; border: 1px solid var(--border); border-radius: 3px; padding: 3px 8px; cursor: pointer; transition: all 0.2s; }
+.btn-clear:hover { color: var(--text2); border-color: var(--border2); }
+.log-stream { flex: 1; overflow-y: auto; padding: 10px; font-family: var(--font-mono); font-size: 11px; line-height: 1.8; }
+.log-entry { display: flex; gap: 8px; padding: 3px 6px; border-radius: 3px; animation: log-in 0.2s ease; margin-bottom: 1px; }
+@keyframes log-in { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
+.log-time { color: var(--text3); flex-shrink: 0; font-size: 10px; }
+.log-type { flex-shrink: 0; width: 56px; }
+.log-msg { color: var(--text); word-break: break-all; }
+.log-entry.info .log-type { color: var(--accent); }
+.log-entry.success .log-type { color: var(--green); }
+.log-entry.error .log-type { color: var(--red); }
+.log-entry.warn .log-type { color: var(--orange); }
+.log-entry.fire .log-type { color: var(--purple); }
+.log-entry.success { background: rgba(0,255,136,0.03); }
+.log-entry.error { background: rgba(255,59,59,0.03); }
+
+/* PIPELINE */
+.pipeline-status { border-top: 1px solid var(--border); padding: 12px 18px; flex-shrink: 0; }
+.pipeline-label { font-family: var(--font-mono); font-size: 9px; color: var(--text3); letter-spacing: 0.15em; margin-bottom: 10px; }
+.pipeline-steps { display: flex; align-items: center; }
+.pipeline-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; }
+.pipeline-step:not(:last-child)::after { content: ''; position: absolute; top: 12px; left: 50%; width: 100%; height: 1px; background: var(--border); z-index: 0; transition: background 0.3s; }
+.pipeline-step.done:not(:last-child)::after { background: var(--green2); }
+.step-dot { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg2); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 8px; color: var(--text3); position: relative; z-index: 1; transition: all 0.3s; }
+.pipeline-step.active .step-dot { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.1); animation: step-pulse 0.8s ease-in-out infinite; }
+.pipeline-step.done .step-dot { border-color: var(--green2); background: rgba(0,204,106,0.15); color: var(--green2); }
+.pipeline-step.error .step-dot { border-color: var(--red); background: rgba(255,59,59,0.1); color: var(--red); }
+@keyframes step-pulse { 0%,100% { box-shadow: 0 0 6px rgba(0,212,255,0.2); } 50% { box-shadow: 0 0 14px rgba(0,212,255,0.4); } }
+.step-label { font-family: var(--font-mono); font-size: 8px; color: var(--text3); text-align: center; transition: color 0.3s; }
+.pipeline-step.active .step-label { color: var(--accent); }
+.pipeline-step.done .step-label { color: var(--green2); }
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+        <path d="M9 2L16 6V12L9 16L2 12V6L9 2Z" stroke="#00d4ff" stroke-width="1.2" fill="none"/>
+        <path d="M9 6L12 8V11L9 13L6 11V8L9 6Z" fill="#00d4ff" opacity="0.6"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">SOC<span>.</span>DETECT <span style="font-size:12px;color:var(--text2)">v2.0</span></div>
+      <div class="logo-sub">MULTI-ATTACK SIMULATOR — PIPELINE DE DÉTECTION TEMPS RÉEL</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--green)"><span class="status-dot"></span>PIPELINE ACTIF</span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+</header>
+
+<main style="display:grid;grid-template-rows:auto 1fr;grid-template-columns:1fr 360px;">
+
+  <!-- METRICS -->
+  <div class="metrics-bar" style="grid-column:1/-1">
+    <div class="metric"><div class="metric-label">Total envoyées</div><div class="metric-value accent" id="m-sent">0</div><div class="metric-sub">cette session</div></div>
+    <div class="metric"><div class="metric-label">Succès pipeline</div><div class="metric-value green" id="m-ok">0</div><div class="metric-sub">traitées</div></div>
+    <div class="metric"><div class="metric-label">Erreurs</div><div class="metric-value red" id="m-err">0</div><div class="metric-sub">échecs</div></div>
+    <div class="metric"><div class="metric-label">En cours</div><div class="metric-value orange" id="m-running">0</div><div class="metric-sub">simultanées</div></div>
+    <div class="metric"><div class="metric-label">Taux succès</div><div class="metric-value green" id="m-rate">—</div><div class="metric-sub">%</div></div>
+    <div class="metric"><div class="metric-label">Dernier envoi</div><div class="metric-value" id="m-last" style="font-size:12px;color:var(--text2);margin-top:4px">—</div><div class="metric-sub" id="m-last-t">—</div></div>
+  </div>
+
+  <!-- LEFT PANEL -->
+  <div class="panel-left">
+
+    <!-- SCENARIOS -->
+    <div class="section">
+      <div class="section-title">Scénarios d'attaques — clic pour sélectionner</div>
+      <div class="scenarios-grid" id="grid"></div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="section">
+      <div class="section-title">Paramètres de tir</div>
+      <div class="controls">
+        <div>
+          <div class="ctrl-label">Mode d'envoi</div>
+          <select id="mode-select">
+            <option value="sequential">Séquentiel (1 par 1)</option>
+            <option value="parallel">Parallèle (simultané)</option>
+            <option value="burst">Burst (vague rapide)</option>
+          </select>
+        </div>
+        <div>
+          <div class="ctrl-label">Intervalle (sec)</div>
+          <input type="number" id="interval-input" value="2" min="0" max="30" step="1">
+        </div>
+      </div>
+      <div class="btn-row" style="margin-bottom:8px">
+        <button class="btn btn-primary" id="btn-fire-selected" onclick="fireSelected()" disabled>FIRE SÉLECTIONNÉS</button>
+        <button class="btn btn-purple" onclick="selectAll()">TOUT SÉLECT.</button>
+        <button class="btn btn-danger" onclick="clearSelection()">RESET</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-orange" id="btn-fire-all" onclick="fireAll()">FIRE ALL — 6 SCÉNARIOS</button>
+        <button class="btn btn-danger" id="btn-stop" onclick="stopAll()" disabled>STOP</button>
+      </div>
+    </div>
+
+    <!-- QUEUE -->
+    <div class="section" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <div class="section-title">File d'exécution</div>
+      <div class="queue-list" id="queue-list">
+        <div class="empty-queue">Aucune attaque en file</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel-right">
+    <div class="log-header">
+      <div class="log-title">EXECUTION LOG — TEMPS RÉEL</div>
+      <button class="btn-clear" onclick="clearLog()">CLR</button>
+    </div>
+    <div class="log-stream" id="log-stream">
+      <div class="log-entry info"><span class="log-time">00:00:00</span><span class="log-type">[INIT]</span><span class="log-msg" style="color:var(--text2)">Simulateur SOC v2 prêt. Mode multi-attaques activé.</span></div>
+    </div>
+    <div class="pipeline-status">
+      <div class="pipeline-label">PIPELINE DE DÉTECTION — DERNIÈRE EXÉCUTION</div>
+      <div class="pipeline-steps" id="pipeline">
+        <div class="pipeline-step" data-i="0"><div class="step-dot">WH</div><div class="step-label">Webhook</div></div>
+        <div class="pipeline-step" data-i="1"><div class="step-dot">NR</div><div class="step-label">Normalise</div></div>
+        <div class="pipeline-step" data-i="2"><div class="step-dot">VT</div><div class="step-label">VirusTotal</div></div>
+        <div class="pipeline-step" data-i="3"><div class="step-dot">SC</div><div class="step-label">Score</div></div>
+        <div class="pipeline-step" data-i="4"><div class="step-dot">RT</div><div class="step-label">Router</div></div>
+        <div class="pipeline-step" data-i="5"><div class="step-dot">JR</div><div class="step-label">Jira</div></div>
+        <div class="pipeline-step" data-i="6"><div class="step-dot">SL</div><div class="step-label">Slack</div></div>
+        <div class="pipeline-step" data-i="7"><div class="step-dot">OK</div><div class="step-label">Done</div></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const WEBHOOK = 'https://atefjarray.app.n8n.cloud/webhook/soc-alert-intake';
+
+const SCENARIOS = [
+  { id:'bf', name:'Brute Force RDP', sev:'high', src:'45.33.32.156', user:'administrator', host:'SRV-RDP-01', rule:'Brute Force RDP Detection', tactic:'Credential Access', tech:'T1110', asset:'high', source:'splunk' },
+  { id:'rw', name:'Ransomware', sev:'critical', src:'185.220.101.45', user:'admin', host:'SRV-FILE-01', rule:'Ransomware Detection Critical', tactic:'Impact', tech:'T1486', asset:'critical', source:'crowdstrike' },
+  { id:'ph', name:'Phishing Email', sev:'medium', src:'91.234.99.45', user:'user.dupont', host:'PC-DUPONT-01', rule:'Phishing Email Detected', tactic:'Initial Access', tech:'T1566', asset:'medium', source:'sentinel' },
+  { id:'lm', name:'Lateral Movement', sev:'critical', src:'10.0.0.22', user:'svc_account', host:'SRV-DC-01', rule:'Lateral Movement WMI', tactic:'Lateral Movement', tech:'T1021', asset:'critical', source:'elastic' },
+  { id:'c2', name:'C2 Beacon', sev:'high', src:'185.220.101.45', user:'jmartin', host:'PC-JMARTIN-02', rule:'C2 Beacon Detected', tactic:'Command and Control', tech:'T1071', asset:'high', source:'darktrace' },
+  { id:'ex', name:'Exfiltration', sev:'critical', src:'10.0.0.55', user:'root', host:'SRV-DB-PROD', rule:'Data Exfiltration Suspected', tactic:'Exfiltration', tech:'T1041', asset:'critical', source:'splunk' }
+];
+
+let selected = new Set();
+let sent=0, ok=0, err=0, running=0;
+let stopFlag = false;
+let pipeTimer = null;
+let queueItems = [];
+
+function buildPayload(s) {
+  return { alert_id: s.id.toUpperCase()+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6), rule_name: s.rule, severity: s.sev, src_ip: s.src, dst_ip: '192.168.1.'+Math.floor(Math.random()*200+10), user: s.user, hostname: s.host, ioc_type:'ip', ioc_value: s.src, asset_criticality: s.asset, source: s.source, mitre_tactic: s.tactic, mitre_technique: s.tech };
+}
+
+function renderScenarios() {
+  const g = document.getElementById('grid');
+  g.innerHTML = SCENARIOS.map(s => `
+    <div class="scenario-card" data-sev="${s.sev}" data-id="${s.id}" id="card-${s.id}" onclick="toggleSelect('${s.id}')">
+      <span class="sc-badge badge-${s.sev}">${s.sev.toUpperCase()}</span>
+      <div class="sc-name">${s.name}</div>
+      <div class="sc-ip">${s.src}</div>
+      <div class="sc-mitre">${s.tech} · ${s.tactic}</div>
+      <div class="sc-status" id="status-${s.id}"></div>
+    </div>
+  `).join('');
+}
+
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  updateCardStates();
+  document.getElementById('btn-fire-selected').disabled = selected.size === 0;
+}
+
+function selectAll() { SCENARIOS.forEach(s => selected.add(s.id)); updateCardStates(); document.getElementById('btn-fire-selected').disabled = false; }
+function clearSelection() { selected.clear(); updateCardStates(); document.getElementById('btn-fire-selected').disabled = true; resetStatuses(); }
+
+function updateCardStates() {
+  SCENARIOS.forEach(s => {
+    const c = document.getElementById('card-'+s.id);
+    if (selected.has(s.id)) c.classList.add('selected');
+    else c.classList.remove('selected');
+  });
+}
+
+function resetStatuses() {
+  SCENARIOS.forEach(s => { document.getElementById('status-'+s.id).textContent = ''; const c = document.getElementById('card-'+s.id); c.classList.remove('sending','done-ok','done-err','queued'); });
+}
+
+function now() { return new Date().toLocaleTimeString('fr-FR', { hour12: false }); }
+
+function addLog(msg, type='info') {
+  const s = document.getElementById('log-stream');
+  const labels = { info:'[INFO]', success:'[OK]', error:'[ERR]', warn:'[WARN]', fire:'[FIRE]' };
+  const e = document.createElement('div');
+  e.className = 'log-entry '+type;
+  e.innerHTML = `<span class="log-time">${now()}</span><span class="log-type">${labels[type]||'[LOG]'}</span><span class="log-msg">${msg}</span>`;
+  s.appendChild(e);
+  s.scrollTop = s.scrollHeight;
+}
+
+function clearLog() { document.getElementById('log-stream').innerHTML = ''; addLog('Journal effacé.', 'info'); }
+
+function updateMetrics() {
+  document.getElementById('m-sent').textContent = sent;
+  document.getElementById('m-ok').textContent = ok;
+  document.getElementById('m-err').textContent = err;
+  document.getElementById('m-running').textContent = running;
+  document.getElementById('m-rate').textContent = sent > 0 ? Math.round(ok/sent*100)+'%' : '—';
+}
+
+function setCardState(id, state) {
+  const c = document.getElementById('card-'+id);
+  const st = document.getElementById('status-'+id);
+  c.classList.remove('sending','done-ok','done-err','queued');
+  if (state === 'queued') { c.classList.add('queued'); st.textContent = '⏳'; }
+  else if (state === 'sending') { c.classList.add('sending'); st.textContent = '→'; }
+  else if (state === 'ok') { c.classList.add('done-ok'); st.textContent = '✓'; }
+  else if (state === 'err') { c.classList.add('done-err'); st.textContent = '✗'; }
+  else { st.textContent = ''; }
+}
+
+function addQueueItem(s, state) {
+  const item = { id: s.id+'_'+Date.now(), scenario: s, state };
+  queueItems.push(item);
+  renderQueue();
+  return item;
+}
+
+function updateQueueItem(item, state) {
+  item.state = state;
+  item.time = now();
+  renderQueue();
+}
+
+function renderQueue() {
+  const list = document.getElementById('queue-list');
+  if (queueItems.length === 0) { list.innerHTML = '<div class="empty-queue">Aucune attaque en file</div>'; return; }
+  list.innerHTML = queueItems.slice(-8).reverse().map(q => `
+    <div class="queue-item ${q.state}">
+      <div class="q-dot ${q.state}"></div>
+      <div class="q-label">${q.scenario.name} [${q.scenario.sev.toUpperCase()}]</div>
+      <div class="q-time">${q.time || ''}</div>
+    </div>
+  `).join('');
+}
+
+function animatePipeline(success) {
+  if (pipeTimer) clearTimeout(pipeTimer);
+  const steps = document.querySelectorAll('.pipeline-step');
+  steps.forEach(s => s.classList.remove('active','done','error'));
+  let i = 0;
+  const delays = [0,300,600,1200,1800,2400,2900,3400];
+  function next() {
+    if (i > 0) steps[i-1].classList.replace('active','done');
+    if (i < steps.length) {
+      steps[i].classList.add('active'); i++;
+      if (i < steps.length) pipeTimer = setTimeout(next, delays[i]-delays[i-1]);
+      else pipeTimer = setTimeout(() => steps[steps.length-1].classList.replace('active', success?'done':'error'), 400);
+    }
+  }
+  next();
+}
+
+async function sendOne(scenario, qItem) {
+  const payload = buildPayload(scenario);
+  running++; updateMetrics();
+  setCardState(scenario.id, 'sending');
+  updateQueueItem(qItem, 'sending');
+  addLog(`FIRE ${scenario.name} [${scenario.sev.toUpperCase()}] — ${scenario.src} / ${scenario.user}`, 'fire');
+  animatePipeline(true);
+  document.getElementById('m-last').textContent = scenario.name;
+  document.getElementById('m-last-t').textContent = now();
+  try {
+    const res = await fetch(WEBHOOK, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (res.ok) {
+      ok++; sent++;
+      addLog(`Pipeline SOC OK — Jira + Elastic + Slack + Gmail ${scenario.sev==='critical'?'+ PagerDuty':''} ✓`, 'success');
+      setCardState(scenario.id, 'ok');
+      updateQueueItem(qItem, 'done');
+    } else throw new Error('HTTP '+res.status);
+  } catch(e) {
+    err++; sent++;
+    addLog(`Erreur ${scenario.name}: ${e.message}`, 'error');
+    setCardState(scenario.id, 'err');
+    updateQueueItem(qItem, 'error');
+  }
+  running--; updateMetrics();
+}
+
+async function fireSelected() {
+  const toFire = SCENARIOS.filter(s => selected.has(s.id));
+  if (toFire.length === 0) return;
+  await fireList(toFire);
+}
+
+async function fireAll() {
+  await fireList(SCENARIOS);
+}
+
+async function fireList(list) {
+  stopFlag = false;
+  setUIBusy(true);
+  const mode = document.getElementById('mode-select').value;
+  const interval = parseInt(document.getElementById('interval-input').value) * 1000;
+  addLog(`═══ LANCEMENT ${list.length} SCÉNARIOS — mode: ${mode.toUpperCase()} ═══`, 'warn');
+
+  const items = list.map(s => { setCardState(s.id, 'queued'); return addQueueItem(s, 'waiting'); });
+
+  if (mode === 'parallel') {
+    await Promise.all(list.map((s, i) => sendOne(s, items[i])));
+  } else if (mode === 'burst') {
+    const promises = list.map((s, i) => new Promise(r => setTimeout(() => sendOne(s, items[i]).then(r), i * 500)));
+    await Promise.all(promises);
+  } else {
+    for (let i = 0; i < list.length; i++) {
+      if (stopFlag) { addLog('Arrêt demandé.', 'warn'); break; }
+      await sendOne(list[i], items[i]);
+      if (i < list.length - 1 && !stopFlag) {
+        addLog(`Pause ${interval/1000}s...`, 'info');
+        await new Promise(r => setTimeout(r, interval));
+      }
+    }
+  }
+  addLog(`═══ FIN — ${ok}/${sent} succès ═══`, ok===sent?'success':'warn');
+  setUIBusy(false);
+}
+
+function stopAll() { stopFlag = true; addLog('Signal STOP envoyé...', 'warn'); }
+
+function setUIBusy(busy) {
+  document.getElementById('btn-fire-all').disabled = busy;
+  document.getElementById('btn-fire-selected').disabled = busy || selected.size === 0;
+  document.getElementById('btn-stop').disabled = !busy;
+  if (busy) {
+    document.getElementById('btn-fire-all').classList.add('active');
+  } else {
+    document.getElementById('btn-fire-all').classList.remove('active');
+    queueItems = [];
+    renderQueue();
+    resetStatuses();
+  }
+}
+
+function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR', { hour12: false }); }
+
+renderScenarios();
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
